@@ -1,0 +1,40 @@
+# SIDTD Training Configuration for EfficientNet-B3
+# Binary Classification: BONA_FIDE (0) vs FORGED (1)
+# Note: SIDTD is strictly for document forgery detection, NOT AI-generation detection.
+
+model:
+  name: "efficientnet_b3"
+  pretrained: true
+  num_classes: 2
+  dropout: 0.3
+  class_names:
+    - "BONA_FIDE"
+    - "FORGED"
+
+training:
+  batch_size: 16
+  epochs: 25
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  patience: 5
+  image_size: 300
+  lr_scheduler: "cosine"  # 'cosine' or 'step'
+  step_size: 7
+  gamma: 0.1
+
+data:
+  # Path to unzipped or archive directories for SIDTD
+  dataset_root: "data/sidtd"
+  split_type: "Split_normal"  # Predefined SIDTD split: Split_normal
+  templates_dir: "templates"
+
+runtime:
+  device: "auto"
+  num_workers: 4
+  mixed_precision: true
+  seed: 42
+
+output:
+  checkpoint_dir: "models"
+  checkpoint_filename: "sidtd_efficientnet_b3.pth"
+  save_best_only: true

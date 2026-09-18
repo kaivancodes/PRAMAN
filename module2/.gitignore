@@ -1,0 +1,79 @@
+# Python byte code and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Datasets and training archives (CRITICAL: Do NOT commit datasets)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+data/
+datasets/
+templates/
+templates.zip
+split_normal/
+split_normal.zip
+SIDTD/
+sidtd/
+
+# Training logs and experiments
+runs/
+events.out.tfevents.*
+wandb/
+tensorboard/
+*.log
+
+# Temporary forensic representations & outputs
+tmp/
+temp/
+scratch/
+*.ela.jpg
+*.ela.png
+*.dct.npy
+output/
+reports/
+
+# Notebooks and checkpoints
+.ipynb_checkpoints/
+*.ipynb
+checkpoints/
+*.pth.tar
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
