@@ -421,3 +421,51 @@ data/
 ```
 
 Do not commit the dataset to GitHub. Keep it on the GPU filesystem and keep `data/` ignored.
+
+
+## Production Forensic Pipeline
+
+For each document that reaches Module 2, the production path is:
+
+```text
+Real uploaded image
+        ↓
+Common input validation / upstream gate
+        ↓
+Document boundary detection
+        ↓
+Document cropping
+        ↓
+Perspective correction
+        ↓
+CLAHE / contrast normalization
+        ↓
+        ┌──────────────────────────────┐
+        │                              │
+        ↓                              ↓
+   TAMPER BRANCH                  GUILLOCHÉ BRANCH
+        │                              │
+   RGB + ELA + DCT             Security-pattern extraction
+        │                              │
+   EfficientNet-B3              Crop / normalize pattern
+        │                              │
+   Tamper Result                 Siamese ResNet-18
+        │                              │
+        └──────────────┬───────────────┘
+                       ↓
+              Combine Results
+                       ↓
+                Forensic Score
+                       ↓
+                  Risk Engine
+```
+
+The two forensic branches run in parallel after common document normalization. A technical error remains an `ERROR`/incomplete result and is not converted into a forensic `FAIL`.
+
+### Training/evaluation consistency
+
+Training and held-out evaluation use the same core deterministic document normalization before branch-specific preprocessing. The production upload-quality gate itself is not part of dataset training.
+
+Tamper: `dataset image → common document normalization → RGB + ELA + DCT → EfficientNet-B3`
+
+Guilloché: `dataset image → common document normalization → security-pattern extraction → crop/normalize → Siamese ResNet-18`
