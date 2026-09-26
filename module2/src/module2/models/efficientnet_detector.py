@@ -22,6 +22,7 @@ def build_efficientnet_b3(
     num_classes: int = 2,
     pretrained: bool = False,
     dropout: float = 0.3,
+    input_channels: int = 5,
 ) -> nn.Module:
     """Construct EfficientNet-B3 with custom classification head.
 
@@ -35,6 +36,27 @@ def build_efficientnet_b3(
     """
     weights = EfficientNet_B3_Weights.DEFAULT if pretrained else None
     model = efficientnet_b3(weights=weights)
+
+    if input_channels != 3:
+        old_conv = model.features[0][0]
+        new_conv = nn.Conv2d(
+            input_channels,
+            old_conv.out_channels,
+            kernel_size=old_conv.kernel_size,
+            stride=old_conv.stride,
+            padding=old_conv.padding,
+            dilation=old_conv.dilation,
+            groups=old_conv.groups,
+            bias=old_conv.bias is not None,
+        )
+        with torch.no_grad():
+            new_conv.weight[:, :3] = old_conv.weight
+            if input_channels > 3:
+                extra = old_conv.weight.mean(dim=1, keepdim=True)
+                new_conv.weight[:, 3:] = extra.repeat(1, input_channels - 3, 1, 1)
+            if old_conv.bias is not None:
+                new_conv.bias.copy_(old_conv.bias)
+        model.features[0][0] = new_conv
 
     in_features = model.classifier[1].in_features
     model.classifier = nn.Sequential(
@@ -70,13 +92,13 @@ class EfficientNetB3TamperDetector:
         self.class_names = class_names or CLASS_NAMES
         self.checkpoint_path = Path(checkpoint_path) if checkpoint_path else None
 
-        self.model = build_efficientnet_b3(num_classes=self.num_classes, pretrained=False)
+        self.model = build_efficientnet_b3(num_classes=self.num_classes, pretrained=False, input_channels=5)
         self._load_checkpoint()
         self.model.to(self.device)
         self.model.eval()
 
         logger.info(
-            f"SIDTD EfficientNet-B3 initialized on {self.device} (classes: {self.class_names})"
+            f"EfficientNet-B3 forensic initialized on {self.device} (classes: {self.class_names})"
         )
 
     def _load_checkpoint(self) -> None:
