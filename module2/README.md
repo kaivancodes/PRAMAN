@@ -300,3 +300,19 @@ Features:
 - **Guilloché Reference Library**: When reference patterns are not yet registered for a country/document combination, Module 2 returns `REFERENCE_REQUIRED`. It does not invent authenticity verdicts.
 - **AI-Generation Gate**: Currently operates with standard image frequency/heuristic checks and an extensible interface; replace with a dedicated production model once trained on verified synthetic document datasets.
 - **Risk Engine Decision**: Module 2 outputs raw forensic pass scores (0–100) and explicit flag statuses. It does not determine final business rules (Allow, Review, Deny), which remain the sole responsibility of the downstream Risk Engine.
+
+## Model Training Architecture
+
+### Tamper / Splice Model
+EfficientNet-B3 is trained as a binary classifier using five input channels: RGB + ELA + DCT. CASIA-v2.0 and SIDTD provide forged supervision; MIDV-2020 contributes bona-fide document imagery without inventing forged labels. Raw document preprocessing is applied before forensic representation generation. RGB, ELA, and DCT receive the same spatial augmentation so their pixels remain aligned.
+
+### Guilloché Model
+Siamese ResNet-18 is trained on authentic/security-pattern imagery from MIDV-2020 + SIDTD. It learns an embedding space using CosineEmbeddingLoss and compares document pattern crops against authentic references using cosine similarity.
+
+### Evaluation
+training/evaluate_models.py is the ML evaluation pipeline. It uses held-out data and reports accuracy, precision, recall, F1, ROC-AUC, and confusion matrix for the tamper model, plus similarity-based metrics for Guilloché. The tests/ directory separately tests software correctness and training/representation regressions.
+
+### Production Model Artifacts
+Only these trained artifacts are expected for Module 2.2:
+- models/efficientnet_b3_combined_tamper.pth
+- models/guilloche_siamese_resnet18.pth
