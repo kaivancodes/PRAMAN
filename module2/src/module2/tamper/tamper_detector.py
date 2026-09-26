@@ -1,4 +1,4 @@
-"""Tamper / Forgery detector wrapper using SIDTD EfficientNet-B3 model.
+"""Tamper / Forgery detector wrapper using EfficientNet-B3 tamper model.
 
 Processes document images and returns structured tamper results.
 """
