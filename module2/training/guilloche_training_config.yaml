@@ -1,0 +1,47 @@
+# Guilloché Security Pattern Training Configuration for Siamese ResNet-18
+# Model: Siamese-style ResNet-18 feature encoder with Contrastive/Cosine Embedding Loss
+
+model:
+  name: "resnet18"
+  pretrained: false
+  embedding_dim: 128
+  dropout: 0.2
+
+training:
+  batch_size: 32
+  epochs: 30
+  learning_rate: 0.0002
+  weight_decay: 0.0001
+  patience: 6
+  image_size: 128
+  margin: 0.3  # Contrastive margin for negative pairs
+  lr_scheduler: "cosine"  # 'cosine' or 'step'
+  step_size: 8
+  gamma: 0.5
+
+preprocessing:
+  enabled: true
+  perspective_warp: true
+  clahe: true
+  min_doc_area_ratio: 0.20
+
+data:
+  # Path to security pattern reference dataset or templates directory
+  dataset_root: "data"
+  templates_dir: "templates/Images"
+  reals_dir: "reals"
+  fakes_dir: "fakes"
+  val_split: 0.2
+  test_split: 0.1
+  pairs_per_epoch: 1000
+
+runtime:
+  device: "auto"
+  num_workers: 2
+  mixed_precision: true
+  seed: 42
+
+output:
+  checkpoint_dir: "models"
+  checkpoint_filename: "guilloche_siamese_resnet18.pth"
+  save_best_only: true
