@@ -577,6 +577,8 @@ def main() -> None:
             checkpoint = {
                 "epoch": epoch,
                 "model_name": model_name,
+                "input_channels": 5,
+                "forensic_inputs": ["RGB", "ELA", "DCT"],
                 "class_names": cfg.get("model", {}).get("class_names", ["BONA_FIDE", "FORGED"]),
                 "model_state_dict": model.state_dict(),
                 "val_metrics": val_metrics,
