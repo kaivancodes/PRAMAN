@@ -1,12 +1,8 @@
-# Guilloché Security Pattern Training
-# Siamese ResNet-18 trained on MIDV-2020 + SIDTD document/template images.
-# CASIA is intentionally not used for this branch.
-
 model:
   name: "resnet18"
   pretrained: true
   embedding_dim: 128
-  dropout: 0.2
+  dropout: 0.20
 
 training:
   batch_size: 32
@@ -15,34 +11,25 @@ training:
   weight_decay: 0.0001
   patience: 6
   image_size: 128
-  margin: 0.3
-  lr_scheduler: "cosine"
+  margin: 0.30
 
 preprocessing:
-  enabled: true
-  perspective_warp: true
-  clahe: true
-  min_doc_area_ratio: 0.20
+  pattern_crop_size: 256
+  image_size: 128
 
 data:
   dataset_root: "data"
-  midv_root: "data/MIDV-2020"
   sidtd_root: "data"
-  sidtd_split_dir: "split_normal"
-  templates_dir: "templates/Images"
-  reals_dir: "reals"
-  fakes_dir: "fakes"
-  val_split: 0.2
-  test_split: 0.1
+  midv_root: "data/MIDV-2020"
   pairs_per_epoch: 2000
 
 runtime:
   device: "auto"
-  num_workers: 2
+  num_workers: 4
   mixed_precision: true
   seed: 42
 
 output:
   checkpoint_dir: "models"
   checkpoint_filename: "guilloche_siamese_resnet18.pth"
-  save_best_only: true
+  similarity_threshold: 0.75
