@@ -64,7 +64,7 @@ def print_section(title: str):
     print("-" * 68)
 
 
-def show_checkpoint_metrics(checkpoint_path: str = "models/sidtd_efficientnet_b3.pth"):
+def show_checkpoint_metrics(checkpoint_path: str = "models/efficientnet_b3_combined_tamper.pth"):
     """Inspect and display metadata, loss function, accuracy, and confusion matrix from checkpoint."""
     import torch
     ckpt_p = Path(checkpoint_path)
@@ -123,7 +123,7 @@ def run_full_pipeline(
     national_id_path: Path = None,
     driving_license_path: Path = None,
     permit_path: Path = None,
-    checkpoint_path: str = "models/sidtd_efficientnet_b3.pth",
+    checkpoint_path: str = "models/efficientnet_b3_combined_tamper.pth",
     simulate_ai_flag: str = None,
     device: str = "auto",
     output_json_path: str = None,
@@ -322,7 +322,7 @@ def main():
     parser.add_argument("--national-id", type=str, default=None, help="Path to national ID image")
     parser.add_argument("--driving-license", type=str, default=None, help="Path to driving license image")
     parser.add_argument("--permit", type=str, default=None, help="Path to permit image")
-    parser.add_argument("--checkpoint", type=str, default="models/sidtd_efficientnet_b3.pth", help="Path to .pth checkpoint")
+    parser.add_argument("--checkpoint", type=str, default="models/efficientnet_b3_combined_tamper.pth", help="Path to .pth checkpoint")
     parser.add_argument("--simulate-ai", type=str, default=None, help="Document name to trigger AI gate failure (e.g. passport)")
     parser.add_argument("--device", type=str, default="auto", help="Compute device (auto, cpu, mps, cuda)")
     parser.add_argument("--reference", type=str, default=None, help="Path to authentic reference template for Guilloché pattern comparison")
