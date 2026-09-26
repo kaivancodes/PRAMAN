@@ -33,7 +33,7 @@ from torchvision.models import (
     efficientnet_b3,
     resnet18,
 )
-from PIL import Image
+from PIL import Image, ImageOps
 import yaml
 from sklearn.metrics import (
     confusion_matrix,
@@ -104,13 +104,10 @@ def get_transforms(image_size: int = 300) -> Tuple[transforms.Compose, transform
         std=[0.229, 0.224, 0.225],
     )
 
+    # Spatial augmentation is applied once in TamperDataset so RGB/ELA/DCT remain aligned.
+    # Do not apply independent random transforms to the three modalities.
     train_transform = transforms.Compose([
         transforms.Resize((image_size, image_size)),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(degrees=8),
-        transforms.RandomPerspective(distortion_scale=0.15, p=0.4),
-        transforms.ColorJitter(brightness=0.25, contrast=0.25, saturation=0.15),
-        transforms.GaussianBlur(kernel_size=(3, 3), sigma=(0.1, 1.5)),
         transforms.ToTensor(),
         normalize,
     ])
