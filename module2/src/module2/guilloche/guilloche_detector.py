@@ -1,7 +1,9 @@
 """Guilloché / Security-Pattern production detector.
 
-The common Module 2 input gate runs before this branch. This detector performs
-only Guilloché-specific preprocessing: pattern extraction -> crop -> resize ->
+The common Module 2 document normalization runs before this branch:
+boundary detection/cropping -> perspective correction -> CLAHE. The production
+upload-quality gate remains separate. This detector then performs only
+Guilloché-specific preprocessing: pattern extraction -> crop -> resize ->
 Siamese ResNet-18 -> cosine similarity against an authentic reference.
 """
 
