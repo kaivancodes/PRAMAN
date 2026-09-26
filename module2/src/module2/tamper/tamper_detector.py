@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional, Union
 import numpy as np
 import torch
 from PIL import Image
+from module2.preprocessing.ela import ErrorLevelAnalysis
+from module2.preprocessing.dct import DiscreteCosineTransform
 
 from module2.models.efficientnet_detector import SIDTDEfficientNetDetector
 from module2.schemas.output_schema import TamperStatus
@@ -55,15 +57,21 @@ class TamperDetector:
         self.mean = torch.tensor(IMAGENET_MEAN).view(3, 1, 1)
         self.std = torch.tensor(IMAGENET_STD).view(3, 1, 1)
 
-    def _preprocess(self, image: Image.Image) -> torch.Tensor:
-        """Preprocess PIL Image for EfficientNet-B3 inference without modifying original."""
-        img_resized = image.convert("RGB").resize(
-            (self.input_size, self.input_size), Image.Resampling.BILINEAR
-        )
-        arr = np.array(img_resized, dtype=np.float32) / 255.0  # H, W, C
-        tensor = torch.from_numpy(arr).permute(2, 0, 1)  # 3, H, W
-        tensor = (tensor - self.mean) / self.std
-        return tensor.unsqueeze(0)  # 1, 3, H, W
+    def _preprocess(self, image: Image.Image, forensic_context: Optional[Dict[str, Any]] = None) -> torch.Tensor:
+        """Build the exact 5-channel RGB + ELA + DCT representation used in training."""
+        img = image.convert("RGB").resize((self.input_size, self.input_size), Image.Resampling.BILINEAR)
+        rgb = torch.from_numpy(np.asarray(img,dtype=np.float32)/255.0).permute(2,0,1)
+        rgb = (rgb-self.mean)/self.std
+
+        ela = ErrorLevelAnalysis(default_quality=90, default_scale=10).compute_ela(img,quality=90,scale=10).convert("L")
+        ela_t = torch.from_numpy(np.asarray(ela,dtype=np.float32)/255.0).unsqueeze(0)
+
+        dct = DiscreteCosineTransform(block_size=8).compute_dct_map(img)
+        dct = np.log1p(np.abs(dct))
+        dct = (dct-dct.min())/max(float(dct.max()-dct.min()),1e-6)
+        dct_t = torch.from_numpy(dct.astype(np.float32)).unsqueeze(0)
+
+        return torch.cat([rgb,ela_t,dct_t],dim=0).unsqueeze(0)
 
     def detect(
         self,
@@ -83,7 +91,7 @@ class TamperDetector:
         """
         try:
             logger.debug(f"Running tamper detector on {doc_type}")
-            input_tensor = self._preprocess(image)
+            input_tensor = self._preprocess(image, forensic_context)
             probs = self.detector.forward_probs(input_tensor)
             probs_np = probs.cpu().numpy()[0]
 
