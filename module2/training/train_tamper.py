@@ -68,46 +68,33 @@ def set_seed(seed: int = 42) -> None:
 
 
 class TamperDataset(Dataset):
-    """Generic dataset loader for tamper/forgery detection samples.
-
-    Labels:
-      0: BONA_FIDE (authentic)
-      1: FORGED (tampered / spliced / copy-move)
-    """
-
-    def __init__(
-        self,
-        samples: List[Tuple[str, int]],
-        transform: Optional[transforms.Compose] = None,
-        enable_raw_preprocessing: bool = True,
-    ):
-        self.samples = samples
-        self.transform = transform
-        self.enable_raw_preprocessing = enable_raw_preprocessing
-        self.preprocessor = RawDocumentPreprocessor() if enable_raw_preprocessing else None
-
-    def __len__(self) -> int:
-        return len(self.samples)
-
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
-        img_path, label = self.samples[idx]
+    """Five-channel forensic dataset: RGB + ELA + DCT."""
+    def __init__(self, samples, transform=None, enable_raw_preprocessing=True):
+        self.samples=samples; self.transform=transform; self.enable_raw_preprocessing=enable_raw_preprocessing
+        self.preprocessor=RawDocumentPreprocessor() if enable_raw_preprocessing else None
+        from module2.preprocessing.ela import ErrorLevelAnalysis
+        from module2.preprocessing.dct import DiscreteCosineTransform
+        self.ela=ErrorLevelAnalysis(default_quality=90, default_scale=10)
+        self.dct=DiscreteCosineTransform(block_size=8)
+    def __len__(self): return len(self.samples)
+    def __getitem__(self, idx):
+        img_path,label=self.samples[idx]
         try:
-            with open(img_path, "rb") as f:
-                img = Image.open(f).convert("RGB")
-                if self.enable_raw_preprocessing and self.preprocessor is not None:
-                    try:
-                        clean_img, _ = self.preprocessor.preprocess_raw_document(img)
-                        img = clean_img
-                    except Exception as pe:
-                        logger.debug(f"Raw preprocessing fallback for {img_path}: {pe}")
+            with open(img_path,"rb") as f: img=Image.open(f).convert("RGB")
+            if self.preprocessor is not None:
+                try: img,_=self.preprocessor.preprocess_raw_document(img)
+                except Exception as e: logger.debug(f"Raw preprocessing fallback for {img_path}: {e}")
+            ela=self.ela.compute_ela(img,quality=90,scale=10).convert("L")
+            dct=self.dct.compute_dct_map(img)
+            dct=np.log1p(np.abs(dct)); dct=(dct-dct.min())/max(float(dct.max()-dct.min()),1e-6)
+            dct_img=Image.fromarray((dct*255).astype(np.uint8),"L")
+            rgb=self.transform(img) if self.transform else transforms.ToTensor()(img)
+            ela_t=(self.transform(ela.convert("RGB")) if self.transform else transforms.ToTensor()(ela))[0:1]
+            dct_t=(self.transform(dct_img.convert("RGB")) if self.transform else transforms.ToTensor()(dct_img))[0:1]
+            return torch.cat([rgb,ela_t,dct_t],dim=0),label
         except Exception as e:
-            logger.warning(f"Error loading image {img_path}: {e}. Returning zero tensor.")
-            img = Image.new("RGB", (300, 300), color=0)
-
-        if self.transform:
-            img = self.transform(img)
-
-        return img, label
+            logger.warning(f"Error loading image {img_path}: {e}")
+            return torch.zeros(5,300,300),label
 
 
 def get_transforms(image_size: int = 300) -> Tuple[transforms.Compose, transforms.Compose]:
@@ -519,6 +506,9 @@ def main() -> None:
     num_classes = cfg.get("model", {}).get("num_classes", 2)
 
     model = build_model(model_name=model_name, num_classes=num_classes, pretrained=pretrained, dropout=dropout)
+    if model_name.lower() == "efficientnet_b3":
+        from module2.models.efficientnet_detector import build_efficientnet_b3
+        model = build_efficientnet_b3(num_classes=num_classes, pretrained=pretrained, dropout=dropout, input_channels=5)
 
     # Resume / Fine-tune from checkpoint if provided
     resume_path = args.resume or cfg.get("training", {}).get("resume")
