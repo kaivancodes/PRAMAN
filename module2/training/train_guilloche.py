@@ -28,6 +28,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from module2.models.siamese_guilloche import SiameseResNet18
 from module2.guilloche.pattern_extractor import PatternExtractor
+from module2.preprocessing.raw_preprocessor import RawDocumentPreprocessor
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] [Guilloche-Train] %(message)s")
 logger = logging.getLogger("guilloche_train")
@@ -94,9 +95,13 @@ class GuillochePairDataset(Dataset):
         self.image_size = image_size
         self.train = train
         self.norm = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        self.raw_preprocessor = RawDocumentPreprocessor()
 
     def _load(self, path):
         image = Image.open(path).convert("RGB")
+        # Use the same common document normalization as production before the
+        # Guilloché-specific branch begins.
+        image, _ = self.raw_preprocessor.preprocess_raw_document(image, doc_type="training_document")
         # Guilloché-specific preprocessing begins with pattern extraction.
         crop = self.extractor.extract_pattern(image)
         crop = crop.resize((self.image_size, self.image_size), Image.Resampling.BILINEAR)
