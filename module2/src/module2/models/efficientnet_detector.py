@@ -44,7 +44,7 @@ def build_efficientnet_b3(
     return model
 
 
-class SIDTDEfficientNetDetector:
+class EfficientNetB3TamperDetector:
     """Manages the lifecycle, loading, and inference of the SIDTD EfficientNet-B3 model.
 
     Ensures single checkpoint loading across multiple documents and cases.
