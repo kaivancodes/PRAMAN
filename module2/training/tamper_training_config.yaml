@@ -1,46 +1,39 @@
-# Splice/Tamper Training Configuration
-# BONA_FIDE (0) vs FORGED (1)
-# CASIA + SIDTD provide forged supervision; MIDV contributes bona-fide document images.
-
 model:
   name: "efficientnet_b3"
   pretrained: true
   num_classes: 2
   input_channels: 5
   forensic_inputs: ["RGB", "ELA", "DCT"]
-  dropout: 0.3
+  dropout: 0.30
   class_names: ["BONA_FIDE", "FORGED"]
+  reason_classes:
+    - GENERAL_MANIPULATION
+    - NAME_FIELD_MANIPULATION
+    - DOB_FIELD_MANIPULATION
+    - DOCUMENT_NUMBER_FIELD_MANIPULATION
+    - PHOTO_REPLACEMENT
+    - COPY_PASTE_SPLICING
+    - ERASURE_REWRITING
+    - DOCUMENT_RECONSTRUCTION
 
 training:
   batch_size: 16
   epochs: 25
   learning_rate: 0.0003
   weight_decay: 0.0001
-  patience: 5
+  reason_loss_weight: 1.0
   image_size: 300
-  lr_scheduler: "cosine"
-
-preprocessing:
-  enabled: true
-  perspective_warp: true
-  clahe: true
-  min_doc_area_ratio: 0.20
 
 data:
   dataset_type: "combined"
   dataset_root: "data"
-  split_type: "split_normal"
-  casia_root: "data/CASIA-v2.0"
-  midv_root: "data/MIDV-2020"
 
 runtime:
   device: "auto"
-  num_workers: 2
+  num_workers: 4
   mixed_precision: true
   seed: 42
 
 output:
   checkpoint_dir: "models"
   checkpoint_filename: "efficientnet_b3_combined_tamper.pth"
-  save_best_only: true
-  save_optimizer: false
