@@ -96,7 +96,7 @@ class TamperDataset(Dataset):
                 img = Image.open(f).convert("RGB")
                 if self.enable_raw_preprocessing and self.preprocessor is not None:
                     try:
-                        clean_img, _ = self.preprocessor.preprocess_raw_image(img)
+                        clean_img, _ = self.preprocessor.preprocess_raw_document(img)
                         img = clean_img
                     except Exception as pe:
                         logger.debug(f"Raw preprocessing fallback for {img_path}: {pe}")
@@ -270,20 +270,48 @@ def load_casia2_dataset(casia_root: Path) -> Tuple[List[Tuple[str, int]], List[T
     return samples[:split_idx], samples[split_idx:]
 
 
+def _collect_midv_authentic_images(midv_root: Path) -> List[Path]:
+    """Collect authentic MIDV-2020 document images.
+
+    MIDV-2020 is a bona-fide identity-document dataset; it does not provide
+    forged/tampered image labels. Therefore MIDV samples are intentionally
+    added only as class-0 (BONA_FIDE) samples. Forged supervision comes from
+    CASIA v2.0 and SIDTD.
+    """
+    candidates = [
+        midv_root / "templates" / "images",
+        midv_root / "dataset" / "templates" / "images",
+        midv_root / "dataset" / "images",
+    ]
+    images: List[Path] = []
+    seen = set()
+    for root in candidates:
+        if not root.exists():
+            continue
+        for ext in ("*.jpg", "*.jpeg", "*.png", "*.tif", "*.tiff"):
+            for p in root.rglob(ext):
+                rp = str(p.resolve())
+                if rp not in seen:
+                    seen.add(rp)
+                    images.append(p)
+    return images
+
+
 def load_midv_dataset(midv_root: Path) -> Tuple[List[Tuple[str, int]], List[Tuple[str, int]]]:
-    """Parse MIDV-2020 document dataset."""
-    samples: List[Tuple[str, int]] = []
-    if not midv_root.exists():
+    """Load MIDV-2020 as bona-fide-only training data.
+
+    MIDV-2020 contains authentic mock documents and rich annotations, but is
+    not a forged-vs-real dataset. We therefore never infer a forged label
+    from a filename. This adapter contributes only label 0 samples.
+    """
+    images = _collect_midv_authentic_images(midv_root)
+    if not images:
+        logger.warning(f"No MIDV-2020 images found in {midv_root}")
         return [], []
 
-    for ext in ("*.jpg", "*.jpeg", "*.png"):
-        for p in midv_root.rglob(ext):
-            p_str = str(p).lower()
-            label = 1 if any(x in p_str for x in ("fake", "forged", "tamper", "alter")) else 0
-            samples.append((str(p), label))
-
+    samples = [(str(p), 0) for p in images]
     random.shuffle(samples)
-    split_idx = int(len(samples) * 0.8)
+    split_idx = max(1, int(len(samples) * 0.8))
     return samples[:split_idx], samples[split_idx:]
 
 
@@ -442,7 +470,7 @@ def main() -> None:
         val_samples.extend(sidtd_val)
 
     if ds_type in ("casia2", "combined"):
-        casia_dir = Path(cfg.get("data", {}).get("casia_root", "data/CASIA2"))
+        casia_dir = Path(cfg.get("data", {}).get("casia_root", "data/CASIA-v2.0"))
         if not casia_dir.is_absolute():
             casia_dir = Path(__file__).resolve().parent.parent / casia_dir
         c_train, c_val = load_casia2_dataset(casia_dir)
@@ -452,7 +480,7 @@ def main() -> None:
             val_samples.extend(c_val)
 
     if ds_type in ("midv2020", "combined"):
-        midv_dir = Path(cfg.get("data", {}).get("midv_root", "data/MIDV2020"))
+        midv_dir = Path(cfg.get("data", {}).get("midv_root", "data/MIDV-2020"))
         if not midv_dir.is_absolute():
             midv_dir = Path(__file__).resolve().parent.parent / midv_dir
         m_train, m_val = load_midv_dataset(midv_dir)
@@ -522,7 +550,7 @@ def main() -> None:
     # Output directory
     out_dir = Path(__file__).resolve().parent.parent / cfg.get("output", {}).get("checkpoint_dir", "models")
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_filename = args.output or cfg.get("output", {}).get("checkpoint_filename", "sidtd_efficientnet_b3.pth")
+    out_filename = args.output or cfg.get("output", {}).get("checkpoint_filename", "efficientnet_b3_combined_tamper.pth")
     if args.dry_run and not args.output:
         out_filename = "dryrun_tamper.pth"
     out_path = out_dir / Path(out_filename).name
