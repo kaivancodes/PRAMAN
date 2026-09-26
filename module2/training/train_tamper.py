@@ -38,6 +38,7 @@ from module2.models.efficientnet_detector import (
 )
 from module2.preprocessing.ela import ErrorLevelAnalysis
 from module2.preprocessing.dct import DiscreteCosineTransform
+from module2.preprocessing.raw_preprocessor import RawDocumentPreprocessor
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] [Tamper-Train] %(message)s")
 logger = logging.getLogger("tamper_train")
@@ -140,6 +141,7 @@ class TamperDataset(Dataset):
         self.dct = DiscreteCosineTransform(block_size=8)
         self.spatial = transforms.RandomHorizontalFlip(p=0.5) if train else transforms.Lambda(lambda x: x)
         self.rgb_norm = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        self.raw_preprocessor = RawDocumentPreprocessor()
 
     def __len__(self):
         return len(self.samples)
@@ -147,6 +149,11 @@ class TamperDataset(Dataset):
     def __getitem__(self, idx):
         s = self.samples[idx]
         img = Image.open(s.path).convert("RGB")
+
+        # Training follows the same common document normalization used in production:
+        # EXIF orientation -> boundary detection/cropping -> perspective correction -> CLAHE.
+        # No upload-quality gate is applied to dataset images.
+        img, _ = self.raw_preprocessor.preprocess_raw_document(img, doc_type="training_document")
 
         # One shared spatial transform is applied before deriving ELA/DCT.
         if self.train and random.random() < 0.5:
