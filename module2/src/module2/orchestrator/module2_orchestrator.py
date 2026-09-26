@@ -330,12 +330,31 @@ class Module2Orchestrator:
 
         # 5. Final Forensic Pass Score Calculation
         final_score = self.scorer.score_case(doc_scoring_summaries)
-        state = CaseState.COMPLETED
+
+        # Forensic FAIL is a hard flag. Technical ERROR is incomplete and
+        # must never be converted into a forensic FAIL.
+        hard_fail_documents = []
+        technical_error_documents = []
+
+        for dtype in ordered_docs:
+            doc_res = document_results.get(dtype, {})
+            tamper_res = doc_res.get("tamper_result") or {}
+            guilloche_res = doc_res.get("guilloche_result") or {}
+
+            if tamper_res.get("status") == TamperStatus.FORGED.value:
+                hard_fail_documents.append(dtype)
+            if guilloche_res.get("status") == GuillocheStatus.INCONSISTENT.value:
+                hard_fail_documents.append(dtype)
+            if tamper_res.get("status") == TamperStatus.ERROR.value or guilloche_res.get("status") == GuillocheStatus.ERROR.value:
+                technical_error_documents.append(dtype)
+
+        hard_fail_documents = list(dict.fromkeys(hard_fail_documents))
+        technical_error_documents = list(dict.fromkeys(technical_error_documents))
+
         logger.info(
-            f"Final score calculated for case {case_input.uuid}: "
-            f"forensic_pass_score = {final_score}/100"
+            f"Final forensic score for case {case_input.uuid}: {final_score}/100; "
+            f"hard_fail={bool(hard_fail_documents)}"
         )
-        logger.info(f"Case completed: uuid={case_input.uuid}")
 
         # 6. Detailed Point-of-Failure Aggregation
         points_of_failure: List[Dict[str, Any]] = []
@@ -354,13 +373,14 @@ class Module2Orchestrator:
                     "status": tamper_res.get("status", TamperStatus.FORGED.value),
                     "failure_reason": (
                         f"Tamper/forgery check failed on '{dtype}'. "
-                        f"Verdict: {verdict}, Forgery Probability: {forgery_prob if forgery_prob is not None else 'N/A'}"
+                        f"Manipulation reason(s): {', '.join(tamper_res.get('failure_reasons') or ['GENERAL_MANIPULATION'])}. "
+                        f"Forgery Probability: {forgery_prob if forgery_prob is not None else 'N/A'}"
                     ),
                     "details": {
                         "forgery_probability": forgery_prob,
                         "confidence": tamper_res.get("confidence"),
-                        "ela_mean": tamper_res.get("ela_mean"),
-                        "dct_high_freq_ratio": tamper_res.get("dct_high_freq_ratio"),
+                        "failure_reasons": tamper_res.get("failure_reasons", []),
+                        "manipulation_reasons": tamper_res.get("manipulation_reasons", {}),
                     },
                 })
 
@@ -374,13 +394,15 @@ class Module2Orchestrator:
                     "check": "GUILLOCHE_PATTERN",
                     "status": GuillocheStatus.INCONSISTENT.value,
                     "failure_reason": (
-                        f"Guilloché background pattern inconsistent with authentic reference on '{dtype}'. "
+                        f"Guilloché background pattern failed on '{dtype}'. "
+                        f"Reason: {', '.join(guilloche_res.get('failure_reasons') or ['GUILLOCHE_PATTERN_INCONSISTENT'])}. "
                         f"Similarity: {sim if sim is not None else 'N/A'}, Required Threshold: {thresh}"
                     ),
                     "details": {
                         "similarity_score": sim,
                         "threshold": thresh,
                         "reference_available": True,
+                        "failure_reasons": guilloche_res.get("failure_reasons", []),
                     },
                 })
             elif (
@@ -407,14 +429,31 @@ class Module2Orchestrator:
                     "failure_reason": f"Guilloché analysis error on '{dtype}': {guilloche_res.get('error', 'unknown')}",
                 })
 
+        if hard_fail_documents:
+            final_status = CaseStatus.RED_FLAG.value
+            flag_type = "FORENSIC_FAILURE"
+            flagged_document = hard_fail_documents[0]
+        elif technical_error_documents:
+            final_status = CaseStatus.ERROR.value
+            flag_type = "FORENSIC_INCOMPLETE"
+            flagged_document = technical_error_documents[0]
+            final_score = None
+        else:
+            final_status = CaseStatus.COMPLETED.value
+            flag_type = None
+            flagged_document = None
+
         return CaseOutput(
             uuid=case_input.uuid,
-            status=CaseStatus.COMPLETED.value,
+            status=final_status,
             ai_test=AIGateStatus.PASS.value,
             ai_generation_check=AIGateStatus.PASS.value,
             forensic_pass_score=final_score,
+            forgery_score=final_score,
             weights_applied=self.scorer.get_weights(),
             points_of_failure=points_of_failure,
+            flag_type=flag_type,
+            flagged_document=flagged_document,
             documents_analyzed=ordered_docs,
             document_results=document_results,
         )
