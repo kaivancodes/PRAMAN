@@ -1,15 +1,13 @@
-# Splice/Tamper Training Configuration for Document Forgery & Splicing Detection
-# Binary Classification: BONA_FIDE (0) vs FORGED (1)
-# Datasets supported: CASIA v2.0, SIDTD (split_normal), MIDV-2020, Combined
+# Splice/Tamper Training Configuration
+# BONA_FIDE (0) vs FORGED (1)
+# CASIA + SIDTD provide forged supervision; MIDV contributes bona-fide document images.
 
 model:
-  name: "efficientnet_b3"  # 'efficientnet_b3' or 'resnet18'
-  pretrained: false
+  name: "efficientnet_b3"
+  pretrained: true
   num_classes: 2
   dropout: 0.3
-  class_names:
-    - "BONA_FIDE"
-    - "FORGED"
+  class_names: ["BONA_FIDE", "FORGED"]
 
 training:
   batch_size: 16
@@ -18,9 +16,7 @@ training:
   weight_decay: 0.0001
   patience: 5
   image_size: 300
-  lr_scheduler: "cosine"  # 'cosine' or 'step'
-  step_size: 7
-  gamma: 0.1
+  lr_scheduler: "cosine"
 
 preprocessing:
   enabled: true
@@ -29,16 +25,11 @@ preprocessing:
   min_doc_area_ratio: 0.20
 
 data:
-  dataset_type: "sidtd"  # 'casia2', 'sidtd', 'midv2020', or 'combined'
+  dataset_type: "combined"
   dataset_root: "data"
-  split_type: "split_normal"  # For SIDTD
-  templates_dir: "templates"
-
-  # Optional path for CASIA v2.0 directory structure
-  casia_root: "data/CASIA2"
-
-  # Optional path for MIDV-2020 dataset
-  midv_root: "data/MIDV2020"
+  split_type: "split_normal"
+  casia_root: "data/CASIA-v2.0"
+  midv_root: "data/MIDV-2020"
 
 runtime:
   device: "auto"
@@ -48,6 +39,6 @@ runtime:
 
 output:
   checkpoint_dir: "models"
-  checkpoint_filename: "sidtd_efficientnet_b3.pth"
+  checkpoint_filename: "efficientnet_b3_combined_tamper.pth"
   save_best_only: true
   save_optimizer: false
