@@ -2,7 +2,7 @@
 
 models:
   model_name: "efficientnet_b3"  # "efficientnet_b3" or "resnet18"
-  sidtd_checkpoint: "models/sidtd_efficientnet_b3.pth"
+  tamper_checkpoint: "models/efficientnet_b3_combined_tamper.pth"
   input_size: 300
   num_classes: 2
   class_names:
