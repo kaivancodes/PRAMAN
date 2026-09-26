@@ -1,6 +1,8 @@
 """Training and forensic-representation regression tests."""
 import sys
 from pathlib import Path
+import tempfile
+import csv
 import numpy as np
 from PIL import Image
 import torch
@@ -45,3 +47,26 @@ def test_five_channel_tensor_shape():
 
 def test_binary_labels_are_valid():
     assert {0, 1}.issubset({0, 1})
+
+
+def test_sidtd_csv_parser_preserves_binary_labels():
+    from training.train_tamper import parse_sidtd_csv
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        img = root / "real.png"
+        Image.new("RGB", (32, 32)).save(img)
+        csv_path = root / "split.csv"
+        with csv_path.open("w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=["image_path", "label"])
+            w.writeheader(); w.writerow({"image_path": "real.png", "label": "0"})
+        samples = parse_sidtd_csv(csv_path, root)
+        assert samples == [(str(img.resolve()), 0)]
+
+
+def test_efficientnet_forward_shape_for_training_contract():
+    model = build_efficientnet_b3(pretrained=False, input_channels=5)
+    model.eval()
+    with torch.inference_mode():
+        out = model(torch.zeros(2, 5, 300, 300))
+    assert out.shape == (2, 2)
+    assert torch.isfinite(out).all()
