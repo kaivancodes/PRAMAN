@@ -44,6 +44,7 @@ def evaluate_tamper(test_csv: Path, dataset_root: Path, checkpoint: Path, device
     loader = DataLoader(ds, batch_size=32, shuffle=False)
 
     model = SIDTDEfficientNetDetector(checkpoint_path=str(checkpoint), device=device)
+    assert model.model.features[0][0].in_channels == 5, "Tamper checkpoint architecture must use RGB+ELA+DCT (5 channels)."
     model.model.eval()
 
     y_true, y_pred, y_prob = [], [], []
