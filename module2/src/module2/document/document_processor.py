@@ -180,27 +180,38 @@ class DocumentProcessor:
         """
         logger.debug(f"Starting Module 2.2 forensic analysis for {doc_type}")
 
-        # 1. Independent forensic preprocessing (ELA and DCT)
-        forensic_context = self.forensic_preprocessor.extract_forensic_package(
-            original_image=original_image,
-            doc_type=doc_type,
-        )
+        # Common preprocessing has already been completed by the orchestrator:
+        # boundary detection/cropping -> perspective correction -> CLAHE.
+        #
+        # Start the two forensic branches in parallel from the same normalized
+        # document image. MPS falls back to sequential execution because
+        # concurrent model forwards are not reliable on that backend.
+        import concurrent.futures
 
-        # 2. Branch A: Splice / Tamper Forensics
-        tamper_result = self.tamper_detector.detect(
-            image=original_image,
-            doc_type=doc_type,
-            forensic_context=forensic_context,
-        )
+        def _run_tamper():
+            return self.tamper_detector.detect(
+                image=original_image,
+                doc_type=doc_type,
+            )
 
-        # 3. Branch B: Guilloché / Background Forensics
-        guilloche_result = self.guilloche_detector.inspect_pattern(
-            image=original_image,
-            doc_type=doc_type,
-            country=country,
-            version=version,
-            region=region,
-            is_applicable=is_guilloche_applicable,
-        )
+        def _run_guilloche():
+            return self.guilloche_detector.inspect_pattern(
+                image=original_image,
+                doc_type=doc_type,
+                country=country,
+                version=version,
+                region=region,
+                is_applicable=is_guilloche_applicable,
+            )
 
-        return tamper_result, guilloche_result, forensic_context
+        if getattr(self.device, "type", "") == "mps":
+            tamper_result = _run_tamper()
+            guilloche_result = _run_guilloche()
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                tamper_future = executor.submit(_run_tamper)
+                guilloche_future = executor.submit(_run_guilloche)
+                tamper_result = tamper_future.result()
+                guilloche_result = guilloche_future.result()
+
+        return tamper_result, guilloche_result, {}
