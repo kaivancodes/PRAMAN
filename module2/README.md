@@ -316,3 +316,80 @@ training/evaluate_models.py is the ML evaluation pipeline. It uses held-out data
 Only these trained artifacts are expected for Module 2.2:
 - models/efficientnet_b3_combined_tamper.pth
 - models/guilloche_siamese_resnet18.pth
+
+
+## GPU Training Only
+
+The GPU machine does not need the production runtime to train Module 2.
+
+Copy/clone only:
+- `module2/training/`
+- `module2/src/module2/models/`
+- `module2/src/module2/preprocessing/ela.py`
+- `module2/src/module2/preprocessing/dct.py`
+- `module2/src/module2/guilloche/pattern_extractor.py`
+- `module2/requirements.txt`
+- the datasets under `module2/data/`
+
+### Tamper training
+
+```bash
+cd PRAMAN/module2
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+python training/train_tamper.py \
+  --config training/tamper_training_config.yaml \
+  --device cuda
+```
+
+Output:
+```
+models/efficientnet_b3_combined_tamper.pth
+models/tamper_training_history.json
+```
+
+### Guilloché training
+
+```bash
+python training/train_guilloche.py \
+  --config training/guilloche_training_config.yaml \
+  --device cuda
+```
+
+Output:
+```
+models/guilloche_siamese_resnet18.pth
+models/guilloche_training_history.json
+```
+
+### Dry-run before full GPU training
+
+```bash
+python training/train_tamper.py --config training/tamper_training_config.yaml --device cuda --dry-run
+python training/train_guilloche.py --config training/guilloche_training_config.yaml --device cuda --dry-run
+```
+
+### What is saved in the Tamper checkpoint
+
+- EfficientNet-B3 weights
+- 5-channel input declaration: RGB + ELA + DCT
+- binary class names
+- manipulation-reason class names
+- Tamper/reason thresholds
+- best validation metrics
+- training configuration
+
+### What is saved in the Guilloché checkpoint
+
+- Siamese ResNet-18 weights
+- 128-D embedding dimension
+- pattern crop size
+- model input size
+- ImageNet normalization declaration
+- similarity threshold
+- best validation metrics
+- training configuration
+
+Production input validation is intentionally NOT part of these training scripts. It belongs to the common Module 2 upload gate before the queue item enters the two forensic branches.
