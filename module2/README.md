@@ -393,3 +393,31 @@ python training/train_guilloche.py --config training/guilloche_training_config.y
 - training configuration
 
 Production input validation is intentionally NOT part of these training scripts. It belongs to the common Module 2 upload gate before the queue item enters the two forensic branches.
+
+### SIDTD dataset on the GPU
+
+The provided Google Drive file can be downloaded on the GPU using its Drive file ID:
+
+```bash
+cd PRAMAN/module2
+mkdir -p data
+pip install gdown
+gdown "https://drive.google.com/uc?id=1b3zxOM_7eEhs5h3MxNdrRFmfVWT1ym33" -O data/SIDTD_download
+```
+
+If the downloaded file is an archive, extract it under `module2/data/` so that the training config can resolve:
+
+```
+data/
+├── split_normal/
+│   ├── train_split_SIDTD.csv
+│   ├── val_split_SIDTD.csv
+│   └── test_split_SIDTD.csv
+├── templates/
+│   └── Images/
+│       ├── reals/
+│       └── fakes/
+└── ...
+```
+
+Do not commit the dataset to GitHub. Keep it on the GPU filesystem and keep `data/` ignored.
