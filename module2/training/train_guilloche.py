@@ -90,7 +90,7 @@ class GuillochePairDataset(Dataset):
                 img1 = Image.open(f).convert("RGB")
                 if self.enable_raw_preprocessing and self.preprocessor is not None:
                     try:
-                        clean1, _ = self.preprocessor.preprocess_raw_image(img1)
+                        clean1, _ = self.preprocessor.preprocess_raw_document(img1)
                         img1 = clean1
                     except Exception:
                         pass
@@ -103,7 +103,7 @@ class GuillochePairDataset(Dataset):
                 img2 = Image.open(f).convert("RGB")
                 if self.enable_raw_preprocessing and self.preprocessor is not None:
                     try:
-                        clean2, _ = self.preprocessor.preprocess_raw_image(img2)
+                        clean2, _ = self.preprocessor.preprocess_raw_document(img2)
                         img2 = clean2
                     except Exception:
                         pass
@@ -149,99 +149,99 @@ def get_transforms(image_size: int = 128) -> Tuple[transforms.Compose, transform
     return train_transform, val_transform
 
 
+def _images(root: Path) -> List[str]:
+    out: List[str] = []
+    if not root.exists():
+        return out
+    for ext in ("*.jpg", "*.jpeg", "*.png", "*.tif", "*.tiff"):
+        out.extend(str(p) for p in root.rglob(ext))
+    return sorted(set(out))
+
+
+def _load_sidtd_template_images(dataset_root: Path) -> Tuple[List[str], List[str]]:
+    real_dir = dataset_root / "templates" / "Images" / "reals"
+    fake_dir = dataset_root / "templates" / "Images" / "fakes"
+    return _images(real_dir), _images(fake_dir)
+
+
+def _load_midv_images(midv_root: Path) -> List[str]:
+    """Load MIDV-2020 document/template imagery as authentic reference images."""
+    candidates = [
+        midv_root / "templates" / "images",
+        midv_root / "dataset" / "templates" / "images",
+        midv_root / "dataset" / "images",
+    ]
+    found: List[str] = []
+    for root in candidates:
+        found.extend(_images(root))
+    return sorted(set(found))
+
+
+def _group_key(path: str) -> str:
+    """Group related captures/templates without treating filenames as labels."""
+    stem = Path(path).stem.lower()
+    parts = stem.split("_")
+    if len(parts) >= 2:
+        return "_".join(parts[:2])
+    return parts[0]
+
+
 def build_pairs_from_disk(
     dataset_root: Path,
-    pairs_count: int = 1000,
+    pairs_count: int = 2000,
+    midv_root: Optional[Path] = None,
 ) -> List[Tuple[str, str, int]]:
-    """Automatically discover document templates on disk and generate positive/negative pattern pairs.
+    """Build Guilloché metric-learning pairs from MIDV-2020 + SIDTD.
 
-    - Positive pairs (+1):
-      a) Different photos/scans of same authentic document template (e.g. alb_id_00 with alb_id_01).
-      b) Self-pair with data augmentation crop.
-    - Negative pairs (-1):
-      a) Authentic document paired with forged counterpart (e.g. alb_id_00 with alb_id_00_fake_00).
-      b) Authentic document paired with completely different document type/country (e.g. alb_id with esp_id).
+    MIDV-2020 contributes bona-fide document/template images. SIDTD contributes
+    bona-fide and forged template images. No filename is interpreted as a
+    tamper label. Positive pairs are from the same template/group; negative
+    pairs are from different groups or bona-fide/forged SIDTD patterns.
     """
-    reals_candidates = [
-        dataset_root / "templates" / "Images" / "reals",
-        dataset_root / "Images" / "reals",
-        dataset_root / "reals",
-    ]
-    fakes_candidates = [
-        dataset_root / "templates" / "Images" / "fakes",
-        dataset_root / "Images" / "fakes",
-        dataset_root / "fakes",
-    ]
+    sidtd_reals, sidtd_fakes = _load_sidtd_template_images(dataset_root)
+    midv_reals = _load_midv_images(midv_root) if midv_root else []
 
-    reals_dir = None
-    for cand in reals_candidates:
-        if cand.exists() and cand.is_dir():
-            reals_dir = cand
-            break
-
-    fakes_dir = None
-    for cand in fakes_candidates:
-        if cand.exists() and cand.is_dir():
-            fakes_dir = cand
-            break
-
-    if not reals_dir:
-        logger.warning(f"Could not find authentic images directory under {dataset_root}")
-        return []
-
-    real_images = sorted([str(p) for p in list(reals_dir.glob("*.[jJ][pP][gG]")) + list(reals_dir.glob("*.[pP][nN][gG]")) + list(reals_dir.glob("*.[jJ][pP][eE][gG]"))])
-    fake_images = sorted([str(p) for p in list(fakes_dir.glob("*.[jJ][pP][gG]")) + list(fakes_dir.glob("*.[pP][nN][gG]")) + list(fakes_dir.glob("*.[jJ][pP][eE][gG]"))]) if fakes_dir else []
-
-    logger.info(f"Found {len(real_images)} authentic images and {len(fake_images)} forged images.")
+    real_images = sorted(set(sidtd_reals + midv_reals))
+    fake_images = sidtd_fakes
 
     if len(real_images) < 2:
-        logger.warning("Need at least 2 real images to build pairs.")
+        logger.warning("Need at least two authentic MIDV/SIDTD images for Guilloché training.")
         return []
 
-    # Group reals by document class prefix (e.g. alb_id, esp_id, etc.)
-    reals_by_prefix: Dict[str, List[str]] = {}
-    for r in real_images:
-        name = Path(r).stem
-        parts = name.split("_")
-        prefix = "_".join(parts[:2]) if len(parts) >= 2 else parts[0]
-        reals_by_prefix.setdefault(prefix, []).append(r)
+    groups: Dict[str, List[str]] = {}
+    for p in real_images:
+        groups.setdefault(_group_key(p), []).append(p)
+
+    group_keys = list(groups)
+    positive_candidates = [g for g in group_keys if len(groups[g]) >= 2]
 
     pairs: List[Tuple[str, str, int]] = []
-    half_count = pairs_count // 2
+    half = pairs_count // 2
 
-    # 1. Generate Positive Pairs (+1)
-    for _ in range(half_count):
-        # Pick a random prefix
-        prefix = random.choice(list(reals_by_prefix.keys()))
-        group = reals_by_prefix[prefix]
-        if len(group) >= 2:
-            r1, r2 = random.sample(group, 2)
+    # Positive: same document/template family.
+    for _ in range(half):
+        if positive_candidates:
+            g = random.choice(positive_candidates)
+            a, b = random.sample(groups[g], 2)
         else:
-            r1 = group[0]
-            r2 = group[0]  # Siamese network will evaluate self-pair under independent random transforms
-        pairs.append((r1, r2, 1))
+            a = b = random.choice(real_images)
+        pairs.append((a, b, 1))
 
-    # 2. Generate Negative Pairs (-1)
-    prefixes = list(reals_by_prefix.keys())
-    for _ in range(half_count):
+    # Negative: forged-vs-real where available, otherwise different authentic groups.
+    for _ in range(pairs_count - half):
         if fake_images and random.random() < 0.6:
-            # Pair real with a forged image
-            r1 = random.choice(real_images)
-            f1 = random.choice(fake_images)
-            pairs.append((r1, f1, -1))
-        elif len(prefixes) >= 2:
-            # Pair across different document types/countries
-            p1, p2 = random.sample(prefixes, 2)
-            r1 = random.choice(reals_by_prefix[p1])
-            r2 = random.choice(reals_by_prefix[p2])
-            pairs.append((r1, r2, -1))
+            pairs.append((random.choice(real_images), random.choice(fake_images), -1))
+        elif len(group_keys) >= 2:
+            g1, g2 = random.sample(group_keys, 2)
+            pairs.append((random.choice(groups[g1]), random.choice(groups[g2]), -1))
         else:
-            r1 = random.choice(real_images)
-            r2 = random.choice(real_images)
-            pairs.append((r1, r2, -1))
+            pairs.append((random.choice(real_images), random.choice(real_images), -1))
 
     random.shuffle(pairs)
-    logger.info(f"Generated {len(pairs)} Siamese training/evaluation pairs.")
+    logger.info(
+        "Guilloché sources: MIDV authentic=%d, SIDTD real=%d, SIDTD forged=%d; pairs=%d",
+        len(midv_reals), len(sidtd_reals), len(sidtd_fakes), len(pairs)
+    )
     return pairs
 
 
@@ -398,7 +398,11 @@ def main() -> None:
         dataset_root = Path(__file__).resolve().parent.parent / dataset_root_str
 
     pairs_count = 50 if args.dry_run else cfg.get("data", {}).get("pairs_per_epoch", 1000)
-    all_pairs = build_pairs_from_disk(dataset_root, pairs_count=pairs_count)
+    midv_root_str = cfg.get("data", {}).get("midv_root", "data/MIDV-2020")
+    midv_root = Path(midv_root_str)
+    if not midv_root.is_absolute():
+        midv_root = Path(__file__).resolve().parent.parent / midv_root_str
+    all_pairs = build_pairs_from_disk(dataset_root, pairs_count=pairs_count, midv_root=midv_root)
 
     if not all_pairs:
         logger.error(f"No pairs could be created from {dataset_root}. Exiting.")
