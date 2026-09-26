@@ -146,3 +146,7 @@ class EfficientNetB3TamperDetector:
         logits = self.model(tensor)
         probs = torch.softmax(logits, dim=-1)
         return probs
+
+
+# Backward-compatible import name used by existing Module 2 components.
+SIDTDEfficientNetDetector = EfficientNetB3TamperDetector
