@@ -1,9 +1,10 @@
-# Guilloché Security Pattern Training Configuration for Siamese ResNet-18
-# Model: Siamese-style ResNet-18 feature encoder with Contrastive/Cosine Embedding Loss
+# Guilloché Security Pattern Training
+# Siamese ResNet-18 trained on MIDV-2020 + SIDTD document/template images.
+# CASIA is intentionally not used for this branch.
 
 model:
   name: "resnet18"
-  pretrained: false
+  pretrained: true
   embedding_dim: 128
   dropout: 0.2
 
@@ -14,10 +15,8 @@ training:
   weight_decay: 0.0001
   patience: 6
   image_size: 128
-  margin: 0.3  # Contrastive margin for negative pairs
-  lr_scheduler: "cosine"  # 'cosine' or 'step'
-  step_size: 8
-  gamma: 0.5
+  margin: 0.3
+  lr_scheduler: "cosine"
 
 preprocessing:
   enabled: true
@@ -26,14 +25,16 @@ preprocessing:
   min_doc_area_ratio: 0.20
 
 data:
-  # Path to security pattern reference dataset or templates directory
   dataset_root: "data"
+  midv_root: "data/MIDV-2020"
+  sidtd_root: "data"
+  sidtd_split_dir: "split_normal"
   templates_dir: "templates/Images"
   reals_dir: "reals"
   fakes_dir: "fakes"
   val_split: 0.2
   test_split: 0.1
-  pairs_per_epoch: 1000
+  pairs_per_epoch: 2000
 
 runtime:
   device: "auto"
