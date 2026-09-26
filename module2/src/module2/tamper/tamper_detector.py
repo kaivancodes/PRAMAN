@@ -1,7 +1,6 @@
 """Tamper / Manipulation Forensics production wrapper.
 
-Production input has already passed the common Module 2 input-quality gate.
-This wrapper performs only Tamper-specific preprocessing:
+Production input has already passed common document normalization (boundary detection/cropping, perspective correction, and CLAHE). The production upload-quality gate is separate. This wrapper performs only Tamper-specific preprocessing:
 RGB + ELA + DCT -> 5-channel tensor -> EfficientNet-B3.
 """
 
