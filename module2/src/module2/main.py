@@ -58,7 +58,7 @@ def build_orchestrator(config: Optional[Dict[str, Any]] = None) -> Module2Orches
 
     # 1. Models & Detectors
     models_cfg = cfg.get("models", {})
-    checkpoint_path = models_cfg.get("sidtd_checkpoint")
+    checkpoint_path = models_cfg.get("tamper_checkpoint")
     if checkpoint_path:
         # Resolve relative to module root if needed
         ckpt = Path(checkpoint_path)
