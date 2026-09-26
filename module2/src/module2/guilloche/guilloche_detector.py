@@ -1,6 +1,8 @@
-"""Guilloché / Background pattern detector wrapper.
+"""Guilloché / Security-Pattern production detector.
 
-Evaluates document background security patterns against authentic reference patterns.
+The common Module 2 input gate runs before this branch. This detector performs
+only Guilloché-specific preprocessing: pattern extraction -> crop -> resize ->
+Siamese ResNet-18 -> cosine similarity against an authentic reference.
 """
 
 from typing import Any, Dict, Optional
@@ -16,8 +18,6 @@ logger = get_logger("module2.guilloche.guilloche_detector")
 
 
 class GuillocheDetector:
-    """Inference wrapper for Guilloché and background security pattern verification."""
-
     def __init__(
         self,
         reference_manager: Optional[GuillocheReferenceManager] = None,
@@ -39,31 +39,16 @@ class GuillocheDetector:
         region: Optional[str] = "background",
         is_applicable: bool = True,
     ) -> Dict[str, Any]:
-        """Inspect background pattern of document against authentic reference.
-
-        Args:
-            image: Document PIL Image.
-            doc_type: Document type name.
-            country: Issuing country identifier (e.g. USA, IND, GBR).
-            version: Series/version of document.
-            region: Specific pattern region to verify.
-            is_applicable: Set to False if document type does not possess guilloche patterns.
-
-        Returns:
-            Structured dictionary with Guilloché verification result.
-        """
         if not is_applicable:
-            logger.info(f"Guilloché inspection for {doc_type}: NOT_APPLICABLE")
             return {
                 "status": GuillocheStatus.NOT_APPLICABLE.value,
                 "passed": None,
                 "similarity_score": None,
                 "threshold": self.similarity_threshold,
                 "reference_available": False,
-                "reason": "Feature is not applicable to this document type/region",
+                "failure_reasons": [],
             }
 
-        # Retrieve reference pattern
         reference_pattern = self.reference_manager.get_reference(
             country=country,
             document_type=doc_type,
@@ -72,50 +57,49 @@ class GuillocheDetector:
         )
 
         if reference_pattern is None:
-            logger.info(f"Guilloché inspection for {doc_type}: REFERENCE_REQUIRED (no reference found)")
             return {
                 "status": GuillocheStatus.REFERENCE_REQUIRED.value,
                 "passed": None,
                 "similarity_score": None,
                 "threshold": self.similarity_threshold,
                 "reference_available": False,
-                "reason": f"No authentic reference pattern available for {country}/{doc_type}",
+                "failure_reasons": [],
+                "reason": "REFERENCE_NOT_AVAILABLE",
             }
 
         try:
-            # Extract pattern region from query document
-            query_pattern = self.pattern_extractor.extract_pattern(image, region_type=region or "background")
-
-            # Calculate similarity
-            sim = self.similarity_evaluator.compute_similarity(query_pattern, reference_pattern)
-            is_consistent = sim >= self.similarity_threshold
-            status = (
-                GuillocheStatus.CONSISTENT.value
-                if is_consistent
-                else GuillocheStatus.INCONSISTENT.value
+            query_pattern = self.pattern_extractor.extract_pattern(
+                image,
+                region_type=region or "background",
             )
-
-            logger.info(
-                f"Guilloché inspection for {doc_type}: {status} "
-                f"(similarity={sim:.4f}, threshold={self.similarity_threshold})"
+            sim = self.similarity_evaluator.compute_similarity(
+                query_pattern,
+                reference_pattern,
             )
+            consistent = sim >= self.similarity_threshold
 
             return {
-                "status": status,
-                "passed": is_consistent,
-                "similarity_score": round(sim, 4),
+                "status": (
+                    GuillocheStatus.CONSISTENT.value
+                    if consistent
+                    else GuillocheStatus.INCONSISTENT.value
+                ),
+                "passed": consistent,
+                "similarity_score": round(float(sim), 4),
                 "threshold": self.similarity_threshold,
                 "reference_available": True,
-                "reason": None,
+                "failure_reasons": (
+                    [] if consistent else ["GUILLOCHE_PATTERN_INCONSISTENT"]
+                ),
             }
-
         except Exception as e:
-            logger.error(f"Error inspecting guilloche pattern for {doc_type}: {e}")
+            logger.error("Guilloché analysis failed for %s: %s", doc_type, e)
             return {
                 "status": GuillocheStatus.ERROR.value,
                 "passed": False,
                 "similarity_score": None,
                 "threshold": self.similarity_threshold,
                 "reference_available": True,
-                "reason": str(e),
+                "failure_reasons": [],
+                "error": str(e),
             }
